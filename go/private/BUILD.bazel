@@ -22,6 +22,7 @@ filegroup(
         "//go/private/rules:all_files",
         "//go/private/skylib/lib:all_files",
         "//go/private/tools:all_files",
+        "//go/private/windows:all_files",
     ] + glob(["**"]),
     visibility = ["//visibility:public"],
 )

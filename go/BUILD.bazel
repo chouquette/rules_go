@@ -42,6 +42,11 @@ toolchain_type(
     visibility = ["//visibility:public"],
 )
 
+toolchain_type(
+    name = "windres_toolchain",
+    visibility = ["//visibility:public"],
+)
+
 bzl_library(
     name = "def",
     srcs = ["def.bzl"],

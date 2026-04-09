@@ -15,6 +15,9 @@
 GO_TOOLCHAIN = "@io_bazel_rules_go//go:toolchain"
 GO_TOOLCHAIN_LABEL = Label(GO_TOOLCHAIN)
 
+WINDRES_TOOLCHAIN = "@io_bazel_rules_go//go:windres_toolchain"
+WINDRES_TOOLCHAIN_LABEL = Label(WINDRES_TOOLCHAIN)
+
 go_exts = [
     ".go",
 ]
