@@ -21,8 +21,6 @@ load(
     "GO_TOOLCHAIN",
     "GO_TOOLCHAIN_LABEL",
     "SUPPORTS_PATH_MAPPING_REQUIREMENT",
-    "WINDRES_TOOLCHAIN",
-    "WINDRES_TOOLCHAIN_LABEL",
     "asm_exts",
     "cgo_exts",
     "go_exts",
@@ -55,41 +53,6 @@ load(
     "go_transition",
     "non_go_transition",
 )
-
-# Optional windres toolchain entry. config_common.toolchain_type with
-# mandatory=False was added in Bazel 6; on older Bazel we silently omit windres
-# support rather than making it a hard requirement.
-_WINDRES_TOOLCHAIN_OPTIONAL = (
-    config_common.toolchain_type(WINDRES_TOOLCHAIN, mandatory = False)
-    if hasattr(config_common, "toolchain_type")
-    else None
-)
-
-def _compile_windows_manifest(ctx, windres_tc):
-    """Runs windres to produce a .syso embedding the longPathAware manifest."""
-    manifest = ctx.file._windows_longpath_manifest
-
-    # Write a minimal .rc file that declares the manifest as RT_MANIFEST (24),
-    # resource ID 1 (CREATEPROCESS_MANIFEST_RESOURCE_ID). windres locates the
-    # manifest file via the -I flag pointing at its directory.
-    rc = ctx.actions.declare_file("_windows_longpath_manifest.rc")
-    ctx.actions.write(rc, '1 24 "{}"\n'.format(manifest.basename))
-
-    syso = ctx.actions.declare_file("_windows_longpath_manifest.syso")
-    ctx.actions.run(
-        inputs = [rc, manifest],
-        outputs = [syso],
-        executable = windres_tc.windres_info.tool,
-        arguments = [
-            "-i", rc.path,
-            "-o", syso.path,
-            "-O", "coff",
-            "-I", manifest.dirname,
-        ],
-        mnemonic = "GoWindres",
-        toolchain = WINDRES_TOOLCHAIN_LABEL,
-    )
-    return syso
 
 def _go_test_impl(ctx):
     """go_test_impl implements go testing.
@@ -208,17 +171,6 @@ def _go_test_impl(ctx):
     test_deps = external_archive.direct + [external_archive] + ctx.attr._testmain_additional_deps
     if go.coverage_enabled:
         test_deps.append(go.coverdata)
-
-    # Auto-inject a longPathAware PE manifest into Windows test binaries so
-    # that CreateProcess honours paths > MAX_PATH when LongPathsEnabled=1.
-    # This requires a windres toolchain to be registered; if none is present
-    # the manifest is silently omitted (purely opt-in for callers).
-    extra_srcs = []
-    if go.mode.goos == "windows" and _WINDRES_TOOLCHAIN_OPTIONAL:
-        windres_tc = ctx.toolchains[WINDRES_TOOLCHAIN]
-        if windres_tc:
-            extra_srcs.append(_compile_windows_manifest(ctx, windres_tc))
-
     test_go_info = new_go_info(
         go,
         struct(
@@ -228,7 +180,7 @@ def _go_test_impl(ctx):
         importpath = "testmain",
         pathtype = INFERRED_PATH,
         is_main = True,
-        generated_srcs = [main_go] + extra_srcs,
+        generated_srcs = [main_go],
         coverage_instrumented = False,
     )
     test_archive, executable, runfiles = go.binary(
@@ -532,18 +484,11 @@ _go_test_kwargs = {
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
-        # Manifest XML embedded as RT_MANIFEST when windres is available.
-        "_windows_longpath_manifest": attr.label(
-            default = "//go/private/windows:longpath.manifest",
-            allow_single_file = True,
-        ),
     } | CGO_ATTRS,
     "executable": True,
     "test": True,
     "fragments": CGO_FRAGMENTS,
-    "toolchains": [GO_TOOLCHAIN] + CGO_TOOLCHAINS + (
-        [_WINDRES_TOOLCHAIN_OPTIONAL] if _WINDRES_TOOLCHAIN_OPTIONAL else []
-    ),
+    "toolchains": [GO_TOOLCHAIN] + CGO_TOOLCHAINS,
     "doc": """This builds a set of tests that can be run with `bazel test`.
 
     To run all tests in the workspace, and print output on failure (the
