@@ -143,6 +143,12 @@ func Wrap(pkg string) error {
 	err := cmd.Run()
 	streamMerger.ErrW.Close()
 	streamMerger.OutW.Close()
+	if err != nil {
+		if _, ok := err.(*exec.ExitError); !ok {
+			fmt.Fprintf(os.Stderr, "bzltestutil: re-exec failed: %v (%T)\nbzltestutil: exePath=%q (len=%d)\n",
+				err, err, exePath, len(exePath))
+		}
+	}
 	streamMerger.Wait()
 	if err != nil {
 		// force jsonConverter to flush the buffer, so we get the "fail" event when a test case panics.
