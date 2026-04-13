@@ -135,6 +135,8 @@ func Wrap(pkg string) error {
 	// will be killed by Bazel after the grace period (15s) expires.
 	signal.Ignore(syscall.SIGTERM)
 
+	wd, wdErr := os.Getwd()
+
 	cmd := exec.Command(exePath, args...)
 	cmd.Env = append(os.Environ(), "GO_TEST_WRAP=0")
 	cmd.Stderr = io.MultiWriter(os.Stderr, streamMerger.ErrW)
@@ -145,8 +147,23 @@ func Wrap(pkg string) error {
 	streamMerger.OutW.Close()
 	if err != nil {
 		if _, ok := err.(*exec.ExitError); !ok {
-			fmt.Fprintf(os.Stderr, "bzltestutil: re-exec failed: %v (%T)\nbzltestutil: exePath=%q (len=%d)\n",
-				err, err, exePath, len(exePath))
+			fmt.Fprintf(os.Stderr, "bzltestutil: re-exec failed: %v (%T)\n", err, err)
+			fmt.Fprintf(os.Stderr, "bzltestutil: os.Args[0]=%q (len=%d)\n", os.Args[0], len(os.Args[0]))
+			fmt.Fprintf(os.Stderr, "bzltestutil: exePath=%q (len=%d)\n", exePath, len(exePath))
+			fmt.Fprintf(os.Stderr, "bzltestutil: cmd.Path=%q (len=%d)\n", cmd.Path, len(cmd.Path))
+			fmt.Fprintf(os.Stderr, "bzltestutil: TestExecDir=%q (len=%d)\n", chdir.TestExecDir, len(chdir.TestExecDir))
+			if wdErr != nil {
+				fmt.Fprintf(os.Stderr, "bzltestutil: Getwd error: %v\n", wdErr)
+			} else {
+				fmt.Fprintf(os.Stderr, "bzltestutil: working dir=%q (len=%d)\n", wd, len(wd))
+			}
+			for _, name := range []string{
+				"TEST_SRCDIR", "TEST_TMPDIR", "TEST_WORKSPACE",
+				"XML_OUTPUT_FILE", "RUNFILES_DIR", "RUNFILES_MANIFEST_FILE",
+			} {
+				v := os.Getenv(name)
+				fmt.Fprintf(os.Stderr, "bzltestutil: %s=%q (len=%d)\n", name, v, len(v))
+			}
 		}
 	}
 	streamMerger.Wait()
