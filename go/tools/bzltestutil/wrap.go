@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -139,6 +140,16 @@ func Wrap(pkg string) error {
 
 	cmd := exec.Command(exePath, args...)
 	cmd.Env = append(os.Environ(), "GO_TEST_WRAP=0")
+	// On Windows, CreateProcess rejects lpCurrentDirectory > MAX_PATH even when
+	// LongPathsEnabled=1 is set in the registry, regardless of longPathAware PE
+	// manifests or the \\?\ extended-length path prefix. Setting cmd.Dir to a
+	// short path bypasses this restriction. The child's chdir package init() will
+	// call os.Chdir to restore the correct runfiles directory after launch:
+	// os.Chdir (SetCurrentDirectoryW) respects Go's runtime PEB long-path bit,
+	// unlike the CreateProcess lpCurrentDirectory parameter.
+	if runtime.GOOS == "windows" && wdErr == nil && len(wd) >= 260 {
+		cmd.Dir = os.TempDir()
+	}
 	cmd.Stderr = io.MultiWriter(os.Stderr, streamMerger.ErrW)
 	cmd.Stdout = io.MultiWriter(os.Stdout, streamMerger.OutW)
 	streamMerger.Start()
